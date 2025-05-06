@@ -1,47 +1,106 @@
-FROM ubuntu:16.04
-MAINTAINER Doro Wu <fcwu.tw@gmail.com>
+FROM ubuntu:25.04
 
-ENV DEBIAN_FRONTEND noninteractive
+# Environment Configuration
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    container=docker \
+    SYSTEMD_PAGERSECURE=yes \
+    PYTHONDONTWRITEBYTECODE=1
 
-RUN sed -i 's#http://archive.ubuntu.com/#http://tw.archive.ubuntu.com/#' /etc/apt/sources.list
+# ------------------------------------------------------------------------------
 
-# built-in packages
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends software-properties-common curl \
-    && sh -c "echo 'deb http://download.opensuse.org/repositories/home:/Horst3180/xUbuntu_16.04/ /' >> /etc/apt/sources.list.d/arc-theme.list" \
-    && curl -SL http://download.opensuse.org/repositories/home:Horst3180/xUbuntu_16.04/Release.key | apt-key add - \
-    && add-apt-repository ppa:fcwu-tw/ppa \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends --allow-unauthenticated \
-        supervisor \
-        openssh-server pwgen sudo vim-tiny \
-        net-tools \
-        lxde x11vnc xvfb \
-        gtk2-engines-murrine ttf-ubuntu-font-family \
-        libreoffice firefox \
-        fonts-wqy-microhei \
-        language-pack-zh-hant language-pack-gnome-zh-hant firefox-locale-zh-hant libreoffice-l10n-zh-tw \
-        nginx \
-        python-pip python-dev build-essential \
-        mesa-utils libgl1-mesa-dri \
-        gnome-themes-standard gtk2-engines-pixbuf gtk2-engines-murrine pinta arc-theme \
-        dbus-x11 x11-utils \
-		vlc flvstreamer ffmpeg \
-    && apt-get autoclean \
-    && apt-get autoremove \
-    && rm -rf /var/lib/apt/lists/*
+# Install packages and configure system
+RUN apt-get update -q && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+      sudo \
+      systemd \
+      cron \
+      dbus \
+      locales \
+      openssh-server \
+      rsyslog \
+      iproute2 \
+      iputils-ping \
+      mc \
+      net-tools \
+      nginx \
+      tzdata \
+      supervisor \
+      lxde \
+      x11vnc \
+      dbus-x11 \
+      x11-utils \
+      xvfb \
+      wget \
+      curl && \
+    # Configure locale
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8 && \
+    # Create essential man directories before cleanup
+    mkdir -p /usr/share/man/man1
 
+# ------------------------------------------------------------------------------
 
-# tini for subreap                                   
-ENV TINI_VERSION v0.9.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /bin/tini
-RUN chmod +x /bin/tini
+# Systemd Configuration
+RUN systemctl set-default multi-user.target && \
+    # Remove problematic services instead of masking
+    rm -f /lib/systemd/system/getty.target && \
+    rm -f /lib/systemd/system/systemd-udevd.service && \
+    rm -f /lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup-dev*
+#    rm -f /lib/systemd/system/sys-kernel-config.mount && \
+#    rm -f /lib/systemd/system/sys-kernel-debug.mount && \
+#    rm -f /lib/systemd/system/sys-kernel-tracing.mount && \
+#    rm -f /lib/systemd/system/kmod-static-nodes.service && \
+#    rm -f /lib/systemd/system/systemd-modules-load.service
+
+# ------------------------------------------------------------------------------
+
+# Security and Access Configuration
+RUN sed -i 's/^\($ModLoad imklog\)/#\1/' /etc/rsyslog.conf && \
+    echo '%sudo ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
+    passwd -d root && \
+    ssh-keygen -A
+
+# ------------------------------------------------------------------------------
+
+RUN wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | \
+    tee /etc/apt/keyrings/packages.mozilla.org.asc > /dev/null
+
+RUN echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | \
+    tee -a /etc/apt/sources.list.d/mozilla.list > /dev/null
+
+RUN echo '\n\
+    Package: *\n\
+    Pin: origin packages.mozilla.org\n\
+    Pin-Priority: 1000\n\
+    \n\
+    Package: firefox*\n\
+    Pin: release o=Ubuntu\n\
+    Pin-Priority: -1' | \
+    tee /etc/apt/preferences.d/mozilla
+
+RUN apt update -q && apt upgrade -y
+
+# ------------------------------------------------------------------------------
+
+RUN apt-get clean && \
+    rm -rf \
+        /var/lib/apt/lists/* \
+        /var/tmp/* \
+        /tmp/* \
+        /var/log/*log \
+        /var/log/apt/* \
+        /var/log/dpkg.log \
+        /usr/share/doc/*
+
+# ------------------------------------------------------------------------------
 
 ADD image /
-RUN pip install setuptools wheel && pip install -r /usr/lib/web/requirements.txt
 
-EXPOSE 80
-WORKDIR /root
-ENV HOME=/home/ubuntu \
-    SHELL=/bin/bash
-ENTRYPOINT ["/startup.sh"]
+RUN sed -i 's|exit 101|exit 0|g' /usr/sbin/policy-rc.d
+
+VOLUME ["/sys/fs/cgroup", "/tmp", "/run"]
+STOPSIGNAL SIGRTMIN+3
+CMD ["/lib/systemd/systemd"]

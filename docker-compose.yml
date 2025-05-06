@@ -1,0 +1,41 @@
+services:
+  ubuntu-desktop:
+    build:
+      context: .
+    container_name: ubuntu-desktop
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /volumes/ubuntu-desktop:/shared
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /sys/kernel/config:/sys/kernel/config:ro
+      - /sys/kernel/config:/sys/kernel/config:ro
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
+    tmpfs:
+      - /tmp
+      - /run
+    ports:
+      - "6080:80"
+      - "5900:5900"
+    privileged: true
+    #    cap_add:
+    #      - NET_ADMIN
+    runtime: sysbox-runc
+    #    entrypoint: [ "tail", "-f", "/dev/null" ]
+    #    entrypoint: [ "/lib/systemd/systemd" ]
+    networks:
+      - apache
+#    entrypoint: ["/sbin/init"]
+    entrypoint: [ "/lib/systemd/systemd" ]
+#    entrypoint: [ "/lib/systemd/systemd", "--system",  "--deserialize 40" ]
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+
+
+networks:
+  plexnet:
+    external: true
+  cells:
+    external: true
+  apache:
+    external: true

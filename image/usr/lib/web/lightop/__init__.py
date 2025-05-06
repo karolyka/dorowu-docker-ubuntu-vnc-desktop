@@ -15,10 +15,10 @@ app.config.from_object(CONFIG)
 
 # logging
 import logging
-from log.config import LoggingConfiguration
-LoggingConfiguration.set(
-    logging.DEBUG if os.getenv('DEBUG') else logging.INFO,
-    'lightop.log', name='Web')
+# from log.config import LoggingConfiguration
+# LoggingConfiguration.set(
+#     logging.DEBUG if os.getenv('DEBUG') else logging.INFO,
+#     'lightop.log', name='Web')
 
 
 import json
@@ -110,7 +110,7 @@ def redirectme():
     subprocess.check_call(r"supervisorctl reload", shell=True)
 
     # check all running
-    for i in xrange(20):
+    for i in range(20):
         output = subprocess.check_output(r"supervisorctl status | grep RUNNING | wc -l", shell=True)
         if output.strip() == "6":
             FIRST = False
